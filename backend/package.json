@@ -1,18 +1,15 @@
 {
-  "name": "raja-backend",
+  "name": "ai-testcase-backend",
   "version": "1.0.0",
-  "description": "Backend for AI Test Case Copilot (Raja) - pipeline simulation & upload API",
-  "main": "src/server.js",
+  "description": "Backend for AI Test Case Copilot - Step 1 (upload + simulated pipeline)",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "keywords": [],
-  "author": "You",
-  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
     "uuid": "^9.0.0"
