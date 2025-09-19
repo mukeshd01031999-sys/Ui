@@ -1,122 +1,124 @@
-const { v4: uuidv4 } = require('uuid');
+import { v4 as uuidv4 } from "uuid";
 
-// In-memory pipelines store (for prototype/demo)
-const pipelines = new Map();
+const pipelines = {};
 
-// createPipeline -> returns pipeline object and starts simulated progress
-function createPipeline({ files = [], regs = [] }) {
-  const id = uuidv4();
-  const history = [
-    { step: 'parsing', label: 'Parsing Requirements', progress: 0 },
-    { step: 'generate', label: 'Generating Test Cases', progress: 0 },
-    { step: 'mapping', label: 'Mapping Compliance', progress: 0 },
-    { step: 'integration', label: 'Preparing Integration', progress: 0 }
-  ];
-  const pipeline = {
-    id,
-    files,
-    regs,
-    createdAt: new Date().toISOString(),
-    history,
-    finished: false,
-    testCases: []
-  };
+// --- Agent Cards ---
+const agents = {
+  requirement: {
+    id: "requirementAgent",
+    name: "Requirement Understanding Agent",
+    run: async (files) => {
+      // TODO: replace with AI (Vertex AI / NLP)
+      return [
+        { reqId: "REQ-001", type: "functional", text: "System shall encrypt patient data" },
+        { reqId: "REQ-002", type: "regulatory", text: "System shall log user login attempts" },
+      ];
+    },
+  },
 
-  pipelines.set(id, pipeline);
+  testcase: {
+    id: "testCaseAgent",
+    name: "Test Case Generator",
+    run: async (requirements) => {
+      return requirements.map((r, i) => ({
+        id: `TC-${i + 1}`,
+        requirementId: r.reqId,
+        description: `Verify: ${r.text}`,
+        steps: ["Step 1", "Step 2"],
+        expected: "Expected result",
+        status: "Draft",
+      }));
+    },
+  },
 
-  // start simulation (non-blocking)
-  simulatePipeline(pipeline);
+  compliance: {
+    id: "complianceAgent",
+    name: "Compliance Mapping Agent",
+    run: async (testCases, regs) => {
+      return testCases.map(tc => ({
+        ...tc,
+        compliance: regs.map(r => `${tc.id}->${r}`)
+      }));
+    },
+  },
 
-  return pipeline;
-}
+  integration: {
+    id: "integrationAgent",
+    name: "Integration Agent",
+    run: async (testCases) => {
+      // mock push to Jira/ADO
+      return testCases.map(tc => ({
+        ...tc,
+        jiraId: "JIRA-" + Math.floor(Math.random() * 1000)
+      }));
+    },
+  },
 
-function getPipeline(id) {
-  return pipelines.get(id) || null;
-}
-
-function getTestCases(id) {
-  const p = pipelines.get(id);
-  if (!p) return null;
-  if (!p.finished) return null;
-  return p.testCases;
-}
-
-// Very simple simulation of steps with incremental progress.
-// At the end, we generate sample test cases.
-function simulatePipeline(pipeline) {
-  const steps = pipeline.history;
-  let idx = 0;
-
-  const runStep = () => {
-    if (idx >= steps.length) {
-      // finished
-      pipeline.finished = true;
-      pipeline.testCases = generateTestCasesFromPipeline(pipeline);
-      return;
-    }
-
-    const step = steps[idx];
-    let progress = 0;
-    // increase using interval
-    const timer = setInterval(() => {
-      progress += Math.floor(10 + Math.random() * 25); // jumpy progress for demo
-      step.progress = Math.min(100, progress);
-      if (step.progress >= 100) {
-        clearInterval(timer);
-        idx += 1;
-        // small pause between steps
-        setTimeout(runStep, 250);
-      }
-    }, 350);
-  };
-
-  // start first step shortly after creation
-  setTimeout(runStep, 200);
-}
-
-// Produces few sample test-cases referencing the pipeline's files/regs.
-// Replace with real generator that calls Vertex AI / Agent Builder in Step 2.
-function generateTestCasesFromPipeline(pipeline) {
-  // For demo produce one test case per file + 1 generic test case
-  const tcs = [];
-
-  pipeline.files.forEach((f, i) => {
-    tcs.push({
-      id: `TC-${i + 1}`,
-      reqId: `REQ-${Math.floor(Math.random() * 900 + 100)}`,
-      description: `Auto-generated test for file ${f.originalname}`,
-      testSteps: [
-        'Open application',
-        `Upload ${f.originalname} into requirements import`,
-        'Validate parsed sections',
-        'Run generated test case'
-      ],
-      expected: 'System validates requirement and creates pass/fail result',
-      regs: pipeline.regs,
-      status: 'Draft'
-    });
-  });
-
-  // generic one
-  tcs.push({
-    id: `TC-${pipeline.files.length + 1}`,
-    reqId: `REQ-${Math.floor(Math.random() * 900 + 100)}`,
-    description: 'Data privacy check - ensure uploaded PHI is redacted in UI preview',
-    testSteps: [
-      'Upload requirements containing patient data placeholder',
-      'Open preview',
-      'Assert PHI is masked'
-    ],
-    expected: 'PHI not displayed in plain text',
-    regs: pipeline.regs,
-    status: 'Draft'
-  });
-
-  return tcs;
-}
-
-module.exports = {
-  createPipeline,
-  getPipeline,
-  getTestCases
+  reviewer: {
+    id: "reviewerAgent",
+    name: "Reviewer Agent",
+    run: async (testCases) => {
+      return testCases.map(tc => ({
+        ...tc,
+        review: tc.description.length < 20 ? "Too short" : "OK"
+      }));
+    },
+  },
 };
+
+// --- Pipeline Orchestration ---
+export function startPipeline(files, regs) {
+  const id = uuidv4();
+  pipelines[id] = { history: [], finished: false, results: {} };
+
+  runPipeline(id, files, regs);
+  return id;
+}
+
+export function getPipelineStatus(id) {
+  return pipelines[id];
+}
+
+export function getPipelineTestCases(id) {
+  return pipelines[id] ? { testCases: pipelines[id].results.testCases || [] } : null;
+}
+
+// --- Run pipeline with orchestration ---
+async function runPipeline(id, files, regs) {
+  const pipeline = pipelines[id];
+
+  try {
+    // Step 1: Requirement Agent
+    pipeline.history.push({ step: agents.requirement.name, ts: new Date() });
+    const structuredReqs = await agents.requirement.run(files);
+
+    // Step 2 & 3 in parallel (Test Cases + Compliance Mapping)
+    pipeline.history.push({ step: agents.testcase.name, ts: new Date() });
+    pipeline.history.push({ step: agents.compliance.name, ts: new Date() });
+
+    const [testCases, compliance] = await Promise.all([
+      agents.testcase.run(structuredReqs),
+      agents.compliance.run(structuredReqs, regs),
+    ]);
+
+    // merge compliance mapping into testCases
+    const mergedTCs = testCases.map(tc => ({
+      ...tc,
+      compliance: compliance.find(c => c.id === tc.id)?.compliance || [],
+    }));
+
+    // Step 4: Integration
+    pipeline.history.push({ step: agents.integration.name, ts: new Date() });
+    const integrated = await agents.integration.run(mergedTCs);
+
+    // Step 5 (Optional): Reviewer
+    pipeline.history.push({ step: agents.reviewer.name, ts: new Date() });
+    const reviewed = await agents.reviewer.run(integrated);
+
+    pipeline.results.testCases = reviewed;
+    pipeline.finished = true;
+  } catch (err) {
+    pipeline.history.push({ step: "Error", error: err.message, ts: new Date() });
+    pipeline.finished = true;
+  }
+}
