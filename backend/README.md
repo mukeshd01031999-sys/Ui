@@ -6,5 +6,6 @@ This is a simple Express backend for the "AI Test Case Copilot" demo. It support
 
 1. Install dependencies:
    ```bash
-   cd Raja/backend
+   cd Ui/backend
    npm install
+
