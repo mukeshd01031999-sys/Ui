@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    image: ui-backend
+    ports:
+      - "4000:4000"
+    container_name: ui-backend-container
+
+  frontend:
+    build: ./frontend
+    image: ui-frontend
+    ports:
+      - "8080:80"
+    container_name: ui-frontend-container
+    depends_on:
+      - backend
